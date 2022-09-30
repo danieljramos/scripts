@@ -1,0 +1,87 @@
+SELECT date(rf.requested_date) AS requested_date,
+       date(rf.created_at) AS created_date,
+       date(rf.updated_at) AS updated_at,
+       rf.id,
+       rf.product_id,
+       prd.product_id,
+       rf.requested,
+       rf.requested_info,
+       rf.denied,
+       rf.denied_info,
+       date(rf.denied_date) AS denied_date,
+       prd.ip_country,
+       prd.language,
+       prd.browser_language,
+       prd.status_id,
+       cart_line.amount,
+       cart_line.product_price_id,
+       type.name,
+       users."name",
+       users.email,
+       users."comments",
+       users.country_of_passport,
+       users.is_client,
+       users.reason,
+       users.transaction_id,
+       users.reason_refund_request,
+       users.visa_received_question,
+       users.rate_service_question,
+       users.suggestions_improve
+FROM product_refund_info rf
+RIGHT JOIN
+  (SELECT id AS product_id,
+          ip_country,
+          "language",
+          browser_language,
+          status_id,
+          product_type_id
+   FROM product
+   WHERE site_id = '1035') AS prd ON rf.product_id = prd.product_id
+LEFT JOIN
+  (SELECT sum(amount) AS amount,
+          product_id,
+          cart_id,
+          product_price_id
+   FROM cart_line
+   GROUP BY product_id,
+            product_price_id,
+            cart_id) cart_line ON cart_line.product_id = prd.product_id
+LEFT JOIN
+  (SELECT id,
+          "name"
+   FROM product_type
+   GROUP BY id,
+            "name") AS "type" ON type.id = prd.product_type_id
+LEFT JOIN
+  (SELECT cart_id,
+          transaction_id
+   FROM payment
+   WHERE status = 1
+   GROUP BY cart_id,
+            transaction_id) AS pay ON pay.cart_id = cart_line.cart_id
+LEFT JOIN
+  (SELECT "name",
+          email,
+          "comments",
+          country_of_passport,
+          is_client,
+          reason,
+          transaction_id,
+          reason_refund_request,
+          visa_received_question,
+          rate_service_question,
+          suggestions_improve
+   FROM contact_message
+   GROUP BY "name",
+            email,
+            "comments",
+            country_of_passport,
+            is_client,
+            reason,
+            transaction_id,
+            reason_refund_request,
+            visa_received_question,
+            rate_service_question,
+            suggestions_improve) AS users ON users.transaction_id = pay.transaction_id
+WHERE rf.created_at >= '2022-03-01'
+  AND rf.created_at <= '2022-04-30'
