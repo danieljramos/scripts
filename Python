@@ -1,0 +1,73 @@
+Created on Tue Aug 31 13:24:04 2021
+
+@author: Daniel
+"""
+
+import pandas as pd
+import numpy as np
+import datetime as dt   
+import math as mt
+import time
+import json
+
+
+#1. Import the tables needed for the analysis
+ds = pd.read_csv('C://Users/Daniel/Documents/Analisis/daily data/20210831_daily_stats.csv')
+cac = pd.read_csv('C://Users/Daniel/Documents/Python/CAC.csv')
+multi = pd.read_csv ('C://Users/Daniel/Documents/Python/Multiplier.csv')
+date = pd.to_datetime( ds['dateHour'])
+ds['dateHour']= date
+#2. Concatenate the tables
+
+cac['Concat'] = cac['GEO'] + '-' + cac['CardLevel']
+ds['Concat'] = ds['ccCountry'] + '-' + ds['ccType'] + '-' + ds['level']
+
+ds= pd.merge(ds,cac, left_on = 'Concat' , right_on = 'Concat' , how = 'left')
+ds = pd.merge (ds, multi, left_on = 'Concat' , right_on ='Concat', how = 'left')
+
+#3. Filter the table
+
+#ds = ds.loc[ds['ccCountry']=='US']
+ds = ds.loc[ds['dateHour'] < pd.to_datetime('now').floor('d')-pd.offsets.Day(3)]
+ds = ds.loc[ds['dateHour'] > pd.to_datetime('now').floor('d')-pd.offsets.Day(10)]
+#4. KPI calculation
+
+ds[['Publishers','sub_id','None1', 'None2', 'None3']]  = ds['campaignPublisherId'].str.split('_', expand = True) #divide by publishers
+
+#4. Group based on different factors
+ds1= ds.groupby(['Concat','Publishers']).sum().reset_index()
+ds2= ds.groupby(['Concat'])['CAC Maximo'].sum().reset_index() #to take the column to sum
+ds3= ds.groupby(['Publishers']).sum().reset_index() #to take the column to sum
+ds4= ds.groupby(['campaignPublisherId', 'userCountry']).sum().reset_index() #to take the column to sum
+#6. KPI calculation
+ds3['AR%'] = ds3['num_standard_recurrences']/ds3['num_leads']
+ds4['AR%'] = ds4['num_standard_recurrences']/ds4['num_leads']
+
+#6. Conditionals
+
+
+ds3.loc[ds3['AR%'] >= 0.12, 'AR_OK'] = 'High quality' 
+ds3.loc[ds3['AR%'] <= 0.12, 'AR_OK'] = 'Bad quality' 
+ds4.loc[ds4['AR%'] >= 0.16, 'AR_OK'] = 'High quality' 
+ds4.loc[ds4['AR%'] <= 0.16, 'AR_OK'] = 'Bad quality' 
+
+
+#5. New tables based on conditionals
+
+
+
+High_quality = ds4[['campaignPublisherId','userCountry', 'AR_OK']]
+
+High_quality = High_quality.loc[High_quality['AR_OK']== 'High quality']
+
+#6. KPI calculation
+print (ds)
+print (ds1)
+print (ds2)
+print (ds3)
+print (ds4)
+
+#Ds['data_range'] = ('test' if date > '2021-08-11' else 'no_test')
+High_quality.to_excel(r'C://Users/Daniel/Documents/Analisis/daily data/High_quality.xlsx')
+
+
