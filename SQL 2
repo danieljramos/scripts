@@ -1,0 +1,34 @@
+SELECT product_user.email,
+       date(product.created_at) AS date1,
+       product.created_at,
+       status_id,
+       pay.response,
+       product.cashback
+FROM product
+LEFT JOIN product_user ON product.user_id= product_user.id
+LEFT JOIN
+  (SELECT sum(amount) AS amount,
+          product_id,
+          product_price_id,
+          cart_id
+   FROM cart_line
+   GROUP BY product_id,
+            product_price_id,
+            cart_id) cart_line ON cart_line.product_id = product.id
+LEFT JOIN
+  (SELECT sum(amount)AS amount,
+          cart_id,
+          created_at,
+          response
+   FROM payment
+   GROUP BY cart_id,
+            created_at,
+            response) AS pay ON pay.cart_id = cart_line.cart_id
+WHERE site_id = '1035'
+GROUP BY product_user.email,
+         date1,
+         status_id,
+         product.id,
+         product.created_at,
+         pay.response,
+         product.cashback
