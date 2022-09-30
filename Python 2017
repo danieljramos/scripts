@@ -1,0 +1,283 @@
+Created on Mon Jul 31 11:46:25 2017
+
+@author: Daniel
+"""
+
+import pandas as pd
+import numpy as np
+import datetime as dt   
+import math as mt
+import time
+import json
+
+
+
+name = raw_input ('name of file: ')  
+ARPU_cal = name + '.csv'  #create the csv
+headers = ['Affiliate_id', 'Activations', 'Device', 'ARPU', 'Geo', 'date' ]
+Print_headers =  pd.DataFrame(data = [headers])
+today = pd.to_datetime("today",  format='%Y-%m-%d')  
+Print_headers.to_csv(ARPU_cal, header = False, index = False, sep =',')
+ARPU_day = input("ARPU of day nr: ")
+
+
+projectid = "advidi-finance"
+query = """
+SELECT
+Date(date) as date_activation,
+promotor_info,
+platform_text,
+COUNT(promotor_info) AS Activations,
+country_text,
+table_name,
+ conversions.offer_offer_id ,
+ conversions.offer_offer_name ,
+
+ 
+FROM
+(
+Select *
+From
+(SELECT *, "NL/BE" as table_name FROM [bang-data-lake:trackthis_bangmedia.users_v1]),
+(SELECT *, "DK" as table_name FROM [bang-data-lake:trackthis_bangmediadk1.users_v1]),
+(SELECT *, "SE" as table_name FROM [bang-data-lake:trackthis_bangmediase1.users_v1]),
+(SELECT *, "SE" as table_name FROM [bang-data-lake:trackthis_bangmediase2.users_v1]),
+(SELECT *, "UK" as table_name FROM [bang-data-lake:trackthis_bangmediauk1.users_v1]),
+(SELECT *, "UK" as table_name FROM [bang-data-lake:trackthis_bangmediauk2.users_v1]),
+(SELECT *, "AU" as table_name FROM [bang-data-lake:trackthis_bangmediaau2.users_v1]),
+(SELECT *, "NO" as table_name FROM [bang-data-lake:trackthis_bangmediano.users_v1]),
+) as users
+
+LEFT JOIN
+ (SELECT
+ offer_offer_name, offer_offer_id, paid_amount_usd, received_amount_usd,exchange_rate_eur_usd,
+ REGEXP_EXTRACT(
+   conversion_referrer_url,
+   r'enduser_id=([^&]+)&?'
+ ) AS enduser_text
+ FROM [bang-data-lake:finance_cake_advidi.conversions_v1]
+ WHERE advertiser_advertiser_id = '24' AND
+   REGEXP_MATCH(conversion_referrer_url, r'enduser_id=([^&]+)&?')
+ )
+ as conversions
+ON users.enduser_text = conversions.enduser_text
+
+WHERE
+ DATE(date) BETWEEN '2017-01-23' AND '2017-04-22' AND users.sub_type = 'activate' 
+
+
+GROUP BY
+ date_activation,
+ promotor_info,
+ platform_text,
+ country_text,
+ table_name,
+ conversions.offer_offer_id,
+ conversions.offer_offer_name,
+ conversions.received_amount_usd,
+ conversions.paid_amount_usd,
+ conversions.exchange_rate_eur_usd,
+
+ ORDER BY
+ date_activation ASC
+"""
+
+private_key = "C:\\Users\\Daniel\\Documents\\bigquery\\advidi-finance-daniel.json"
+    
+act = pd.read_gbq(query, projectid, private_key=private_key)
+
+
+projectid = "advidi-finance"
+query2 = """
+SELECT 
+ DATE(payments.date) AS date_payment,
+ DATE(users.date) AS date_activation,
+ DATEDIFF(DATE(payments.date),DATE(users.date)) AS date_diff,
+ payments.promotor_info as promotor_info,
+ users.platform_text as platform_text,
+ SUM(FLOAT(payments.euros)) AS EUR,
+ users.country_text,
+ table_name,
+ conversions.offer_offer_id,
+ conversions.offer_offer_name,
+ 
+FROM 
+(
+SELECT *
+
+FROM
+  (SELECT *, "NL/BE" as table_name FROM [bang-data-lake:trackthis_bangmedia.payments_v1] as payments left join [bang-data-lake:trackthis_bangmedia.users_v1] as users ON
+  payments.enduser_text = users.enduser_text where date(users.date) between '2017-01-23' and '2017-04-22' AND users.sub_type = 'activate'),
+  (SELECT *, "UK" as table_name FROM [bang-data-lake:trackthis_bangmediauk1.payments_v1] as payments left join [bang-data-lake:trackthis_bangmediauk1.users_v1] as users ON
+  payments.enduser_text = users.enduser_text where date(users.date) between '2017-01-23' and '2017-04-22' AND users.sub_type = 'activate'),
+  (SELECT *, "UK" as table_name FROM [bang-data-lake:trackthis_bangmediauk2.payments_v1] as payments left join [bang-data-lake:trackthis_bangmediauk2.users_v1] as users ON
+  payments.enduser_text = users.enduser_text where date(users.date) between '2017-01-23' and '2017-04-22' AND users.sub_type = 'activate'), 
+  (SELECT *, "DK" as table_name FROM [bang-data-lake:trackthis_bangmediadk1.payments_v1] as payments left join [bang-data-lake:trackthis_bangmediadk1.users_v1] as users ON
+  payments.enduser_text = users.enduser_text where date(users.date) between '2017-01-23' and '2017-04-22' AND users.sub_type = 'activate'),
+  (SELECT *, "SE" as table_name FROM [bang-data-lake:trackthis_bangmediase1.payments_v1] as payments left join [bang-data-lake:trackthis_bangmediase1.users_v1] as users ON
+  payments.enduser_text = users.enduser_text where date(users.date) between '2017-01-23' and '2017-04-22' AND users.sub_type = 'activate'),
+  (SELECT *, "SE" as table_name FROM [bang-data-lake:trackthis_bangmediase2.payments_v1] as payments left join [bang-data-lake:trackthis_bangmediase2.users_v1] as users ON
+  payments.enduser_text = users.enduser_text where date(users.date) between '2017-01-23' and '2017-04-22' AND users.sub_type = 'activate'),
+  (SELECT *, "AU" as table_name FROM [bang-data-lake:trackthis_bangmediaau2.payments_v1] as payments left join [bang-data-lake:trackthis_bangmediaau2.users_v1] as users ON
+  payments.enduser_text = users.enduser_text where date(users.date) between '2017-01-23' and '2017-04-22' AND users.sub_type = 'activate'),
+   (SELECT *, "NO" as table_name FROM [bang-data-lake:trackthis_bangmediano.payments_v1] as payments left join [bang-data-lake:trackthis_bangmediano.users_v1] as users ON
+  payments.enduser_text = users.enduser_text where date(users.date) between '2017-01-23' and '2017-04-22' AND users.sub_type = 'activate'),
+
+) as VPS.payments
+
+LEFT JOIN
+  (SELECT 
+  offer_offer_name, offer_offer_id, 
+  REGEXP_EXTRACT(
+    conversion_referrer_url,
+    r'enduser_id=([^&]+)&?'
+  ) AS enduser_text
+  FROM [bang-data-lake:finance_cake_advidi.conversions_v1]
+  WHERE advertiser_advertiser_id = '24' AND
+    REGEXP_MATCH(conversion_referrer_url, r'enduser_id=([^&]+)&?')
+  )
+  as conversions
+  ON payments.enduser_text = conversions.enduser_text
+
+GROUP BY
+ date_payment,
+ date_activation,
+ date_diff,
+ promotor_info,
+ platform_text,
+ table_name,
+ users.country_text,
+ conversions.offer_offer_id,
+ conversions.offer_offer_name,
+
+"""
+
+private_key2 = "C:\\Users\\Daniel\\Documents\\bigquery\\advidi-finance-daniel.json"
+    
+df = pd.read_gbq(query2, projectid, private_key=private_key2)
+
+
+#df=pd.read_csv("revenue.csv")
+df_rev = df #read revenue CSV
+
+table_name = df_rev['table_name']
+unique_table_name  =  np.unique(table_name)
+start = 0
+x =  df_rev['promotor_info']
+for t in range (len(unique_table_name)):
+    t_n = unique_table_name[start]
+    
+    df_rev = df_rev.loc[df_rev['table_name'] == t_n,['date_payment','promotor_info', 'date_diff', 'platform_text', 'EUR','table_name','conversions.offer_offer_id']]
+    x =  df_rev['promotor_info']
+    y = np.unique(x)
+    device = df_rev['platform_text']
+    devices = np.unique(device)
+    q= 0 
+    z=0
+    for i in range (len(y)): #loop to take all the values
+    
+   #     df_rev=df #read revenue CSV
+        x =  df_rev['promotor_info']
+        y = np.unique(x)
+        j = y[z] # where we should start
+        promotor_info = j 
+        
+        df_rev = df_rev.loc[df_rev['promotor_info'] == promotor_info,['date_payment','promotor_info', 'date_diff', 'platform_text', 'EUR','table_name','conversions.offer_offer_id']]
+    
+        device = df_rev['platform_text']
+        devices = np.unique(device)
+    
+    
+        for g in range (len(devices)):
+  #          df_rev=df #read revenue CSV
+   #         x =  df_rev['promotor_info']
+   #         y = np.unique(x)
+   #         j = y[z] # where we should start
+   #         promotor_info = j 
+        
+   #         df_rev = df_rev.loc[df_rev['promotor_info'] == promotor_info,['date_payment','promotor_info', 'date_diff', 'platform_text', 'EUR']]
+            device = df_rev['platform_text']
+            devices = np.unique(device)
+            platform_text = devices [q]
+            df_rev = df_rev.loc[df_rev['platform_text'] == platform_text,['date_payment','promotor_info', 'date_diff', 'platform_text', 'EUR','table_name','conversions.offer_offer_id']] #filter on type and select columns
+            df_rev = df_rev.sort_values(['date_diff'], ascending=[1]) #sort on date diff
+            df_rev['date_diff'] = pd.to_numeric(df_rev['date_diff']) *1.0
+            df_rev = df_rev.groupby(['date_diff'], as_index=False).sum() #group by date diff
+   # print(df_rev)
+            df_act= act
+            df_act = df_act.loc[df_act['table_name'] == t_n,['date_activation', 'promotor_info', 'platform_text', 'Activations','table_name','conversions.offer_offer_id']]
+            df_act = df_act.loc[df_act['promotor_info'] == promotor_info,['date_activation', 'promotor_info', 'platform_text', 'Activations','table_name','conversions.offer_offer_id']]
+            df_act = df_act.loc[df_act['platform_text'] == platform_text,['date_activation', 'promotor_info', 'platform_text', 'Activations','table_name','conversions.offer_offer_id']]
+            df_act['date_activation'] = pd.to_datetime(df_act['date_activation'],  format='%Y-%m-%d')
+        
+            df_act['date_diff'] = df_act['date_activation'] - pd.to_datetime("today")
+            df_act['date_diff'] = pd.to_numeric(df_act['date_diff']) / 86400000000000 *-1 - 1 # -2 should variate depends on your max date from the data
+            df_act = df_act.sort_values(['date_diff'], ascending=[1]) #sort on date diff
+            df_act['cum_activations2'] = df_act['Activations'].cumsum()
+            df_act['cum_activations'] = df_act.ix[::-1, 'Activations'].cumsum()[::-1]
+            df_act = df_act.groupby(['date_diff'], as_index=False).sum() #group by date diff
+        #print(df_act)
+#
+            df_rev['date_diff'] = pd.to_numeric(df_rev['date_diff'])
+            dif_rev = df_rev ['date_diff'] #def column
+            dif_act = df_act ['date_diff'] #def column
+            ref_rev = int(max(dif_rev)) #create a column as long date_diff is in rev
+            ref_act = int(max(dif_act)) #create a column as long date_diff is in act
+            if ref_rev >= ref_act:
+                new_col = pd.DataFrame(range(0,ref_rev+1),columns = ['index'])
+            else:
+                new_col = pd.DataFrame(range(0,ref_act+1),columns = ['index'])
+#take the longest daydiff
+            df_union = pd.merge(new_col, df_rev, left_on = 'index', right_on = 'date_diff', how = 'left')
+            del df_union['date_diff']
+            complete = df_union.fillna(0)
+#add the new column
+            df_union2 = pd.merge(new_col, df_act, left_on = 'index', right_on = 'date_diff', how = 'left')
+            del df_union2['date_diff']
+            complete2 = df_union2.fillna(0)
+            complete2['cum_activationsac'] = complete2['Activations'].cumsum()
+            complete2['cum_activationsrev'] = complete2.ix[::-1, 'Activations'].cumsum()[::-1]
+            del complete2['cum_activations2']
+            del complete2['cum_activations']
+            complete2.fillna(0)
+        #complete2 = complete2.groupby(new_col, as_index=False).sum() #group by date diff
+#add the new column
+            df_merge = pd.merge(complete2, complete, left_on = 'index', right_on = 'index', how = 'left')
+            df_merge = df_merge[[ 'index', 'EUR', 'cum_activationsrev']]
+   # print(df_merge)
+            df_merge['ARPU'] = df_merge['EUR'] / df_merge['cum_activationsrev']
+            w  = df_merge['ARPU'].replace([np.inf, -np.inf], np.nan)
+            pp = w.fillna(0)
+            df_merge['Cum_ARPU'] = pp.cumsum()
+  #  print(df_merge)
+   # print("------")
+   # print("------")
+   # print("------")
+    #print ("Affiliate_id : ")
+    #print (promotor_info)
+   # print ("Affiliate_id : " + promotor_info)
+   
+            try:  #when there is not ARPU 14
+        
+                a = max(df_merge['cum_activationsrev'])
+                b = (df_merge.iloc[ARPU_day-1,4])
+                d_t = platform_text
+                results = [j,a,d_t , b,t_n,today]
+        
+                Print_results =  pd.DataFrame(data= [results])
+            
+                Print_results.to_csv(ARPU_cal, index_label = 'headers', encoding='utf-8', mode ='a', header = False, index = False)  
+            except:
+                pass
+  
+   
+ #   print("Result ARPU " + str(ARPU_day) + " for " + platform_text) + ": " + str(df_merge.iloc[ARPU_day-1,4])
+   
+   # print("------")
+   # print("------")
+   # print("------")
+  
+            q =q+1
+        z= z+1
+    q= 0
+start = start + 1
