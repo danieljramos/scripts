@@ -1,0 +1,36 @@
+SELECT c.*, first_day.users_cancel_first_day, second_day.users_cancel_second_day, third_day.users_cancel_third_day
+FROM
+
+(SELECT campaignPublisherId, campaignName, count(id) as total_convs
+FROM gb_api.transaction
+where  transactionType='first_payment' and transactionResult='approved'
+and createdAt >='2021-01-01 00:00:00' 
+GROUP BY  campaignPublisherId, campaignName ) as c
+
+LEFT JOIN
+
+(SELECT  datediff(cancel_date, starting_date)  as diff_in_days, c.campaign_publisher_id, c.campaign_name, count(u.id) as users_cancel_first_day
+FROM gb_api.user_subscription u, campaign_client_info c
+where u.campaign_client_info_id=c.id and starting_date >='2021-01-01 00:00:00' and cancel_date IS NOT NULL AND datediff(cancel_date, starting_date)=0
+GROUP BY c.campaign_publisher_id, c.campaign_name ) as first_day
+
+ON c.campaignPublisherId=first_day.campaign_publisher_id and c.campaignName = first_day.campaign_name
+
+
+LEFT JOIN
+
+(SELECT  datediff(cancel_date, starting_date)  as diff_in_days, c.campaign_publisher_id, c.campaign_name, count(u.id) as users_cancel_second_day
+FROM gb_api.user_subscription u, campaign_client_info c
+where u.campaign_client_info_id=c.id and starting_date >='2021-01-01 00:00:00' and cancel_date IS NOT NULL AND datediff(cancel_date, starting_date)=1
+GROUP BY c.campaign_publisher_id, c.campaign_name ) as second_day
+
+ON c.campaignPublisherId=second_day.campaign_publisher_id and c.campaignName = second_day.campaign_name
+
+LEFT JOIN
+
+(SELECT  datediff(cancel_date, starting_date)  as diff_in_days, c.campaign_publisher_id, c.campaign_name, count(u.id) as users_cancel_third_day
+FROM gb_api.user_subscription u, campaign_client_info c
+where u.campaign_client_info_id=c.id and starting_date >='2021-01-01 00:00:00' and cancel_date IS NOT NULL AND datediff(cancel_date, starting_date)=2
+GROUP BY c.campaign_publisher_id, c.campaign_name ) as third_day
+
+ON c.campaignPublisherId=third_day.campaign_publisher_id and c.campaignName = third_day.campaign_name
