@@ -1,0 +1,107 @@
+SELECT c.*, 
+-- minutes.users_cancel_first_30_minutes,
+first_day.users_cancel_24_hours,
+ second_day.users_cancel_48_hours,
+ third_day.users_cancel_72_hours,
+ users_no_activate.users_no_activate,
+ users_activate.users_activate
+FROM
+
+
+(SELECT  DATE_FORMAT(createdAt, '%Y-%m-%d') as conversion_date, campaignPublisherId, campaignName, ccType, ccCountry, level, transactionGateway ,count(t.id) as total_convs
+FROM gb_api.transaction t, gb_api.payment_binbase p
+where t.ccBin=p.bin and transactionType='first_payment' and transactionResult='approved'
+and createdAt >='2021-01-01 00:00:00' and createdAt <'2021-05-29 00:00:00'
+GROUP BY  campaignPublisherId, campaignName, conversion_date, ccType, ccCountry,transactionGateway , level) as c
+
+
+
+ -- (SELECT  DATE_FORMAT(u.created_at, '%Y-%m-%d') as created_at, TIMESTAMPDIFF(minute, u.created_at,cancel_date)  as diff_in_minutes, c.campaign_publisher_id, 
+ -- c.campaign_name, ccType, ccCountry, level, transactionGateway ,count(u.id) as users_cancel_first_30_minutes
+ -- FROM gb_api.user_subscription u, gb_api.campaign_client_info c , gb_api.transaction t, gb_api.payment_binbase p
+ -- where t.userSubscriptionId = u.id and t.ccBin=p.bin and u.campaign_client_info_id=c.id and u.created_at >='2020-10-01 00:00:00' and u.created_at <'2021-01-29 00:00:00'
+ -- and cancel_date IS NOT NULL AND TIMESTAMPDIFF(minute, u.created_at,cancel_date)<=30
+ -- and t.transactionType='first_payment' and t.transactionResult='approved'
+ -- GROUP BY campaign_publisher_id, campaign_name, created_at, ccCountry, ccType, transactionGateway ,level ) as minutes
+
+ -- ON c.campaignPublisherId=minutes.campaign_publisher_id and c.campaignName = minutes.campaign_name and c.conversion_date=minutes.created_at
+-- and c.ccCountry=minutes.ccCountry and c.ccType=minutes.ccType and c.level=minutes.level and c.transactionGateway=minutes.transactionGateway
+
+LEFT JOIN
+
+
+(SELECT DATE_FORMAT(u.created_at, '%Y-%m-%d') as created_at, TIMESTAMPDIFF(hour, u.created_at,cancel_date)  as diff_in_hours, c.campaign_publisher_id, 
+c.campaign_name, t.ccCountry, t.ccType, p.level,transactionGateway , count(u.id) as users_cancel_24_hours
+FROM gb_api.user_subscription u, gb_api.campaign_client_info c, gb_api.transaction t, gb_api.payment_binbase p 
+where t.userSubscriptionId = u.id and t.ccBin=p.bin and u.campaign_client_info_id=c.id and u.created_at >='2020-10-01 00:00:00' and u.created_at <'2021-01-29 00:00:00'
+and cancel_date IS NOT NULL AND TIMESTAMPDIFF(hour, u.created_at,cancel_date)<24
+and t.transactionType='first_payment' and t.transactionResult='approved'
+GROUP BY campaign_publisher_id, campaign_name , created_at, ccCountry, ccType, transactionGateway ,level ) as first_day
+
+ON c.campaignPublisherId=first_day.campaign_publisher_id and c.campaignName = first_day.campaign_name and c.conversion_date=first_day.created_at
+and c.ccCountry=first_day.ccCountry and c.ccType=first_day.ccType and c.level=first_day.level and c.transactionGateway=first_day.transactionGateway
+
+
+LEFT JOIN
+
+(SELECT   DATE_FORMAT(u.created_at, '%Y-%m-%d') as created_at,TIMESTAMPDIFF(hour, u.created_at,cancel_date)  as diff_in_hours, c.campaign_publisher_id, c.campaign_name,
+ t.ccCountry, t.ccType, p.level,transactionGateway , count(u.id) as users_cancel_48_hours
+FROM gb_api.user_subscription u, gb_api.campaign_client_info c , gb_api.transaction t, gb_api.payment_binbase p 
+where  t.userSubscriptionId = u.id and t.ccBin=p.bin and u.campaign_client_info_id=c.id and u.created_at >='2020-10-01 00:00:00' and u.created_at <'2021-01-29 00:00:00' and cancel_date IS NOT NULL 
+AND TIMESTAMPDIFF(hour, u.created_at,cancel_date)>=24 AND TIMESTAMPDIFF(hour, u.created_at,cancel_date)<48
+and t.transactionType='first_payment' and t.transactionResult='approved'
+GROUP BY campaign_publisher_id, campaign_name , created_at, ccCountry, ccType, transactionGateway ,level ) as second_day
+
+ON c.campaignPublisherId=second_day.campaign_publisher_id and c.campaignName = second_day.campaign_name and c.conversion_date=second_day.created_at
+and c.ccCountry=second_day.ccCountry and c.ccType=second_day.ccType and c.level=second_day.level and c.transactionGateway=second_day.transactionGateway
+
+LEFT JOIN
+
+(SELECT  DATE_FORMAT(u.created_at, '%Y-%m-%d') as created_at, TIMESTAMPDIFF(hour, u.created_at,cancel_date)  as diff_in_hours, c.campaign_publisher_id, c.campaign_name, 
+t.ccCountry, t.ccType, p.level, transactionGateway ,count(u.id) as users_cancel_72_hours
+FROM gb_api.user_subscription u, gb_api.campaign_client_info c ,  gb_api.transaction t, gb_api.payment_binbase p 
+where t.userSubscriptionId = u.id and t.ccBin=p.bin and u.campaign_client_info_id=c.id and u.created_at >='2020-10-01 00:00:00' and u.created_at <'2021-01-29 00:00:00' and cancel_date IS NOT NULL 
+AND TIMESTAMPDIFF(hour, u.created_at,cancel_date)>=48 AND TIMESTAMPDIFF(hour, u.created_at,cancel_date)<72
+and t.transactionType='first_payment' and t.transactionResult='approved'
+GROUP BY campaign_publisher_id, campaign_name,  created_at, ccCountry, ccType, transactionGateway ,level   ) as third_day
+
+ON c.campaignPublisherId=third_day.campaign_publisher_id and c.campaignName = third_day.campaign_name and c.conversion_date=third_day.created_at
+and c.ccCountry=third_day.ccCountry and c.ccType=third_day.ccType and c.level=third_day.level  and c.transactionGateway=third_day.transactionGateway
+
+
+LEFT JOIN
+
+(SELECT DATE_FORMAT(t.createdAt, '%Y-%m-%d') as created_at, campaignPublisherId, campaignName, 
+ccType, ccCountry, level, transactionGateway ,count(t.id) as users_no_activate
+FROM gb_api.transaction t, gb_api.payment_binbase p
+where t.ccBin = p.bin and transactionType='first_payment' and transactionResult='approved'
+and createdAt >='2021-01-01 00:00:00' and createdAt <'2021-05-29 00:00:00'
+and userSubscriptionId not in (select userSubscriptionId from gb_api.transaction
+where transactionType='standard_recurrence' and transactionResult='approved' and transactionSubType='activation' and 
+createdAt >='2021-01-01 00:00:00' and createdAt <'2021-05-29 00:00:00'
+)
+and userSubscriptionId not in ( SELECT  id FROM gb_api.user_subscription u
+where u.created_at >='2020-10-01 00:00:00' and u.created_at <'2021-01-29 00:00:00' and cancel_date IS NOT NULL AND TIMESTAMPDIFF(hour, u.created_at,cancel_date)<72) 
+GROUP BY  campaignPublisherId, campaignName , created_at, ccCountry, ccType,transactionGateway , level) as users_no_activate
+
+ON c.campaignPublisherId=users_no_activate.campaignPublisherId and c.campaignName = users_no_activate.campaignName 
+and c.conversion_date=users_no_activate.created_at and 
+c.ccCountry=users_no_activate.ccCountry and c.ccType=users_no_activate.ccType and c.level=users_no_activate.level and c.transactionGateway=users_no_activate.transactionGateway
+
+
+
+LEFT JOIN
+
+(SELECT DATE_FORMAT(createdAt, '%Y-%m-%d') as created_at , campaignPublisherId, campaignName, 
+ccCountry, ccType, level,transactionGateway , count(t.id) as users_activate
+FROM gb_api.transaction t, gb_api.payment_binbase p
+where   t.ccBin = p.bin and transactionType='first_payment' and transactionResult='approved'
+and createdAt >='2021-01-01 00:00:00' and createdAt <'2021-05-29 00:00:00'
+and userSubscriptionId  in (select userSubscriptionId from gb_api.transaction
+where transactionType='standard_recurrence' and transactionResult='approved' and transactionSubType='activation' and createdAt >='2021-01-01 00:00:00'
+and createdAt <'2021-05-29 00:00:00' 
+)
+GROUP BY  campaignPublisherId, campaignName, created_at , ccCountry, ccType, transactionGateway ,level) as users_activate
+
+ON c.campaignPublisherId=users_activate.campaignPublisherId and c.campaignName = users_activate.campaignName and c.conversion_date=users_activate.created_at
+and c.ccCountry=users_activate.ccCountry and c.ccType=users_act
