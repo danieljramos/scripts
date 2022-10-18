@@ -1,0 +1,110 @@
+Created on Wed Oct 12 19:39:16 2022
+
+@author: daniy
+"""
+from pandasql import sqldf
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import datetime as dt
+user_identity_file = 'C://Users/daniy/Documents/Swissborg/identity_data.csv'
+adquisition_cost_data_file = 'C://Users/daniy/Documents/Swissborg/acquisition_cost_data.csv'
+transaction_data_file = 'C://Users/daniy/Documents/Swissborg/transaction_data.csv'
+
+user_identity = pd.read_csv(user_identity_file)
+adquisition_cost = pd.read_csv(adquisition_cost_data_file)
+transaction_data = pd.read_csv(transaction_data_file)
+
+master_file = pd.merge(user_identity,transaction_data, left_on= 'user_id', right_on='user_id')
+master_file = pd.merge(master_file,adquisition_cost, left_on= 'user_id', right_on='user_id')
+master_file.fillna('', inplace = True)
+#master_file.to_csv('C://Users/daniy/Documents/Swissborg/master_file.csv')
+#conversion rates
+event_count = user_identity.groupby(['event_name'])['event_name'].count()
+amount_of_user = adquisition_cost ['user_id' ].nunique()
+verification_count = event_count.loc['VerificationApproved']
+CR_verification = verification_count/amount_of_user 
+deposit_count = transaction_data[transaction_data['deposit_usd']!=0].nunique()['user_id']
+CR_deposit = deposit_count/verification_count
+yields_count = transaction_data[transaction_data['yield_fees_usd']!=0].nunique()['user_id']
+CR_yields = yields_count/deposit_count
+print(CR_deposit)
+print (CR_verification)
+print(CR_yields)
+#age grouping
+user_identity['age_grouping'] = pd.qcut(user_identity['user_age'],q=10)
+user_age = user_identity['user_age'].dropna()
+user_age.astype(int)
+
+#users distrubution by date
+user_date = transaction_data[['user_id','timestamp']]
+user_date = user_date.groupby(['timestamp'])['user_id'].count()
+plt.plot(user_date)
+user_date.plot()
+#users distribution by deposits
+trade_volume_date = transaction_data[['trade_volume_usd','timestamp']]
+trade_volume_date = trade_volume_date.groupby(['timestamp'])['trade_volume_usd'].sum()
+
+trade_volume_date.plot()
+#revenues
+transaction_data['Revenues'] = transaction_data['exchange_fees_usd']+transaction_data['yield_fees_usd']+transaction_data ['withdrawal_fees_usd']
+Revenue_table = transaction_data[['timestamp','Revenues']]
+Revenue_table = Revenue_table.groupby(['timestamp'])['Revenues'].sum()
+Revenue_table.plot()
+user_date.plot()
+#merge
+Revenue_table_users = transaction_data[['timestamp','Revenues','user_id']]
+Revenue_master = pd.merge(Revenue_table_users,adquisition_cost, left_on= 'user_id', right_on='user_id')
+Revenue_master = Revenue_master.groupby(['timestamp'])[['Revenues','acquisition_cost_usd']].sum()
+Revenue_master.plot()
+
+#histogram by nationality
+Revenue_master_by_age = pd.merge(Revenue_table_users,user_identity, left_on= 'user_id', right_on='user_id')
+Revenue_master_by_age_filter = Revenue_master_by_age[Revenue_master_by_age['event_name'] == 'VerificationApproved']
+Revenue_by_age = Revenue_master_by_age_filter.groupby(['age_grouping'])['Revenues'].sum()
+Revenue_by_nationality = Revenue_master_by_age_filter.groupby(['country_code'])['Revenues'].sum()
+#sacar el top 5 de paises por revenue y el top 5 de grupos de edades por revenue
+Revenue_by_nationality_date = Revenue_master_by_age_filter.groupby(['timestamp_x','country_code'])['Revenues'].sum()
+Revenue_by_nationality_group_age_date = Revenue_master_by_age_filter.groupby(['timestamp_x','country_code','age_grouping'])['Revenues'].sum()
+Revenue_by_age_date = Revenue_master_by_age_filter.groupby(['timestamp_x','age_grouping'])['Revenues'].sum()
+Revenue_by_nationality = Revenue_by_nationality.sort_values( ).tail(10)
+Revenue_by_nationality_date.to_csv('C://Users/daniy/Documents/Swissborg/Revenue_by_nationality_date.csv')
+Revenue_by_age_date.to_csv('C://Users/daniy/Documents/Swissborg/Revenue_by_age_date.csv')
+Revenue_by_nationality_group_age_date.to_csv('C://Users/daniy/Documents/Swissborg/Revenue_by_nationality_group_age_date.csv')
+Revenue_by_nationality_date.plot()
+Revenue_by_nationality.plot.bar()
+Revenue_by_age.plot.bar()
+
+#datediff
+user_identity_verified = user_identity[user_identity['event_name']=='VerificationApproved']
+user_identity_onboarding = user_identity[user_identity['event_name']=='OnboardingCompleted']
+merge_user = pd.merge(user_identity_verified,user_identity_onboarding, left_on= 'user_id', right_on='user_id')
+merge_user[['timestamp_y','timestamp_x']] = merge_user[['timestamp_y','timestamp_x']].apply(pd.to_datetime)
+merge_user['timestamp_y'] = merge_user['timestamp_y'].dt.date
+merge_user['timestamp_x'] = merge_user['timestamp_x'].dt.date 
+merge_user['diff_days'] = (merge_user['timestamp_y'] - merge_user['timestamp_x']) / np.timedelta64(1, 'D')
+merge_user.to_csv('C://Users/daniy/Documents/Swissborg/merge_user.csv')
+user_identity = user_identity[user_identity['event_name']=='VerificationApproved']
+merged= pd.merge(user_identity_verified,transaction_data, left_on= 'user_id', right_on='user_id')
+merged[['timestamp_y','timestamp_x']] = merged[['timestamp_y','timestamp_x']].apply(pd.to_datetime)
+merged['timestamp_actions'] = merged['timestamp_y'].dt.date
+merged['timestamp_verification'] = merged['timestamp_x'].dt.date 
+merged['diff_days'] = (merged['timestamp_actions'] - merged['timestamp_verification']) / np.timedelta64(1, 'D')
+merged_by_geo =merged
+merged = merged.groupby(['diff_days']).agg({'user_id':'count', 'Revenues': 'sum'}).reset_index()
+merged_by_geo = merged_by_geo.groupby(['diff_days','country_code']).agg({'user_id':'count', 'Revenues': 'sum'}).reset_index()
+merged_by_geo['ARPU']= merged['Revenues']/merged['user_id']
+merged = merged[merged['diff_days']>= 0]
+merged['diff_days'] = merged['diff_days'].astype(str)
+merged.to_csv('C://Users/daniy/Documents/Swissborg/merged.csv')
+merged_by_geo = merged_by_geo[merged_by_geo['diff_days']>= 0]
+merged_by_geo.to_csv('C://Users/daniy/Documents/Swissborg/merged_by_geo.csv')
+plt.plot(merged['diff_days'], merged['Revenues'])
+plt.plot(merged['diff_days'],merged['user_id'])
+plt.plot(merged['diff_days'],merged['ARPU'])
+Footer
+© 2022 GitHub, Inc.
+Footer navigation
+Terms
+Privacy
+Sec
