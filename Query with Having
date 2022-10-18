@@ -1,0 +1,12 @@
+Select
+country_code, 
+avg(acquisition_cost_usd) as avg_acquisition_cost_usd , avg(yield_subscription_usd+yield_fees_usd+ withdrawal_fees_usd) as avg_revenue
+from acquisition_data
+left join
+identity_data on acquisition_data.user_id = identity_data.user_id
+left join
+transaction_data on acquisition_data.user_id = transaction_data.user_id
+where event_name = 'VerificationApproved' and deposit_usd > 0
+group by
+country_code
+having DATEDIFF(month, identity_data.timestamp, transaction_data.timestamp) <= 3
