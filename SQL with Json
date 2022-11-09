@@ -1,0 +1,47 @@
+SELECT
+extract(month from created_at) as month, extract(YEAR from created_at) as year, count(distinct(product.id)) as visados_pagados,  
+
+case when fields ->> 'gender'  = '1' then 'male'
+when fields ->> 'gender'  = '2' then 'female'
+when fields ->> 'gender'  = 'male' then 'male'
+when fields ->> 'gender'  = 'female' then 'female'
+when fields ->> 'gender'  = 'F' then 'female'
+when fields ->> 'gender'  = 'M' then 'male'
+when fields ->> 'gender'  = 'f' then 'female'
+when fields ->> 'gender'  = 'm' then 'male'
+when fields ->> 'gender'  = '3' then 'other'
+when fields ->> 'gender'  = 'Other' then 'other'
+when fields ->> 'gender'  = 'other' then 'other'
+else 'no data' end as gender,
+case when http_request ->> 'userAgent' like '%iPad' then 'tablet'
+when  http_request ->> 'userAgent' like '%iPhone%' then 'mobile'
+when  http_request ->> 'userAgent' like '%Android%' then 'mobile'
+when  http_request ->> 'userAgent' like '%Mac OS X%' then 'desktop'
+when  http_request ->> 'userAgent' like '%firefox%' then 'desktop'
+when  http_request ->> 'userAgent' like '%Windows NT%' then 'desktop'
+when  http_request ->> 'userAgent' like '%X11%' then 'desktop'
+else 'other' end as device,
+fields ->> 'dateOfBirth' as date_of_birth,
+floor( cast(date(now()) - date(fields ->> 'dateOfBirth')as float)/365) as age,
+Case when (floor( cast(date(now()) - date(fields ->> 'dateOfBirth')as float)/365)) <= 10 then '0-10'
+when floor( cast(date(now()) - date(fields ->> 'dateOfBirth')as float)/365) between 11 and 18 then '11-18'
+when floor( cast(date(now()) - date(fields ->> 'dateOfBirth')as float)/365) between 19 and 25 then '19-25'
+when floor( cast(date(now()) - date(fields ->> 'dateOfBirth')as float)/365) between 26 and 30 then '26-30'
+when floor( cast(date(now()) - date(fields ->> 'dateOfBirth')as float)/365) between 31 and 40 then '31-40'
+when floor( cast(date(now()) - date(fields ->> 'dateOfBirth')as float)/365) between 41 and 50 then '41-50'
+when floor( cast(date(now()) - date(fields ->> 'dateOfBirth')as float)/365) between 51 and 60 then '51-60'
+when floor( cast(date(now()) - date(fields ->> 'dateOfBirth')as float)/365) between 61 and 70 then '61-70'
+when floor( cast(date(now()) - date(fields ->> 'dateOfBirth')as float)/365) between 71 and 80 then '71-80'
+when floor( cast(date(now()) - date(fields ->> 'dateOfBirth')as float)/365) between 81 and 90 then '81-90'
+when floor( cast(date(now()) - date(fields ->> 'dateOfBirth')as float)/365) between 91 and 100 then '91-100'
+when floor( cast(date(now()) - date(fields ->> 'dateOfBirth')as float)/365) between 100 and 120 then '11-18'
+else 'No data' end as group_of_age,
+case when status_id <> 5 then 'paid' else 'unpaid' end as status, product_type.name as product_name
+sum(count(extract(month from created_at))) over (partition by  extract(month from created_at),extract(YEAR from created_at)) as total
+from product
+left join product_type on product.product_type_id = product_type.id 
+where  fields ->> 'email' not like '%leadtech%' and site_id = '1035' and created_at < '2022-11-08'
+group by
+Month, year,  device, gender, date_of_birth, group_of_age, status,  product_name
+order by
+year, month asc
