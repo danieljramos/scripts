@@ -1,23 +1,22 @@
-SELECT before_update.global_code,
-       before_update.global_name,
-       before_update.mvisas,
-       before_update.created,
-       before_update.updated,
+SELECT general.global_code,
+       general.global_name,
+       
+       general.created,
+       general.updated,
        total_users_before,
        total_users_after,
-       before_update.total_users_before + after_update.total_users_after AS total_user,
+       COALESCE(before_update.total_users_before,0) + coalesce(after_update.total_users_after,0) AS total_user,
        opened_email_before,
        opened_email_after,
-       before_update.opened_email_before + after_update.opened_email_after AS total_opened_email,
+       COALESCE(before_update.opened_email_before,0) + COALESCE(after_update.opened_email_after,0) AS total_opened_email,
        cast(opened_email_before AS float)/cast(total_users_before AS float) AS ratio_open_before,
        cast(opened_email_after AS float)/cast(total_users_after AS float) AS ratio_open_after
 FROM
-  (SELECT count(product.id) AS total_users_before,
-          count(confirmation_message_id) AS opened_email_before,
+ (SELECT 
           template_global.global_code AS global_code,
           template_global.name AS global_name,
           template_category.category AS category,
-          template_global.mvisas AS mvisas,
+          
           date(template_global.created_at) AS created,
           date(template_global.updated_at) AS updated
    FROM product
@@ -32,16 +31,51 @@ FROM
    GROUP BY template_global.global_code,
             template_global.name,
             template_category.category,
-            template_global.mvisas,
+            
+            created,
+            updated
+    having count(product.id)>0 and count(product.id) is not null) AS general
+ left join
+
+
+  (SELECT count(product.id) AS total_users_before,
+          count(confirmation_message_id) AS opened_email_before,
+          template_global.global_code AS global_code,
+          template_global.name AS global_name,
+          template_category.category AS category,
+         
+          date(template_global.created_at) AS created,
+          date(template_global.updated_at) AS updated
+   FROM product
+   LEFT JOIN cart ON product.fields ->> 'token' = cart.token
+   LEFT JOIN TEMPLATE ON product.product_type_id = "template"."product_type_id"
+   LEFT JOIN template_global ON template_global.id = "template"."global_template_id"
+   LEFT JOIN template_category ON template_category.id = template_global.template_category_id
+   WHERE product.site_id = '1035'
+     AND status_id <> 5
+     AND info_requested IS TRUE
+     AND fields ->> 'email' NOT LIKE '%leadtech%'
+     AND product.created_at < date(template_global.updated_at)
+   GROUP BY template_global.global_code,
+            template_global.name,
+            template_category.category,
+            
             created,
             updated) AS before_update
-LEFT JOIN
+            ON general.global_code = before_update.global_code
+AND general.global_name = before_update.global_name
+AND general.category = before_update.category
+
+AND general.created = before_update.created
+AND general.updated = before_update.updated
+            
+left JOIN
   (SELECT count(product.id) AS total_users_after,
           count(confirmation_message_id) AS opened_email_after,
           template_global.global_code AS global_code,
           template_global.name AS global_name,
           template_category.category AS category,
-          template_global.mvisas AS mvisas,
+          
           date(template_global.created_at) AS created,
           date(template_global.updated_at) AS updated
    FROM product
@@ -57,19 +91,19 @@ LEFT JOIN
    GROUP BY template_global.global_code,
             template_global.name,
             template_category.category,
-            template_global.mvisas,
+            
             created,
-            updated) AS after_update ON after_update.global_code = before_update.global_code
-AND after_update.global_name = before_update.global_name
-AND after_update.category = before_update.category
-AND after_update.mvisas = before_update.mvisas
-AND after_update.created = before_update.created
-AND after_update.updated = before_update.updated
-GROUP BY before_update.global_code,
-         before_update.global_name,
-         before_update.mvisas,
-         before_update.created,
-         before_update.updated,
+            updated) AS after_update ON after_update.global_code = general.global_code
+AND after_update.global_name =general.global_name
+AND after_update.category = general.category
+
+AND after_update.created = general.created
+AND after_update.updated =general.updated
+GROUP BY general.global_code,
+         general.global_name,
+      
+         general.created,
+         general.updated,
          total_users_before,
          total_users_after,
          opened_email_before,
