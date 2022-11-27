@@ -1,0 +1,34 @@
+from pandasql import sqldf
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import datetime as dt
+from sklearn.linear_model import LinearRegression
+import seaborn as sns
+lm = LinearRegression()
+transaction_data_file = 'C://Users/daniy/Documents/Swissborg/transaction_data.csv'
+transaction_data = pd.read_csv(transaction_data_file)
+X = transaction_data[['trade_volume_usd']]
+Y = transaction_data[['yield_subscription_usd']]
+
+
+lm.fit(X,Y)
+Yhat = lm.predict(X)
+lm.intercept_
+lm.coef_
+def predict(x):
+    price = lm.intercept_ + lm.coef_ * x
+    return price
+predict(10)
+for i in range (10,20):
+    predict (i)
+    print (predict(i))
+ax1 = sns.distplot (transaction_data ['trade_volume_usd'],hist = False, color = "r", label = 'Actual_value')
+sns.displot (Yhat, hist = False, color = "b", label = 'Predicted_value', ax = ax1)    
+lm.score(X,Y) #p-value
+lm.predict(np.array(30.0).reshape(-1,1))
+new_imput = np.arange(1,101,1).reshape(-1,1)
+predict = lm.predict(new_imput)
+sns.displot (predict, hist = False, color = "b", label = 'Predicted_value') 
+plt.plot(predict)
+plt.plot(new_imput)
