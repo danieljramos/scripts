@@ -1,0 +1,105 @@
+from pandasql import sqldf, load_meat, load_births
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import datetime as dt
+import pingouin as pg
+from scipy import stats
+from scipy.stats import chi2_contingency
+from sklearn.linear_model import LinearRegression
+from statsmodels.stats.weightstats import ztest
+from statsmodels.tsa.arima_process import ArmaProcess
+import statsmodels.api as sm
+from statsmodels.graphics.tsaplots import plot_acf,plot_pacf
+from statsmodels.tsa.seasonal import seasonal_decompose
+import seaborn as sns
+from datetime import datetime as dt
+lm = LinearRegression()
+pysqldf = lambda q: sqldf(q, globals())
+lm = LinearRegression()
+data_file = 'C://Users/daniy/Documents/refurbed/data.csv'
+data = pd.read_csv(data_file)
+data_sql = pysqldf("SELECT date(date) as date, sum(nbr_clicks) as clicks FROM data group by date order by date;")
+data_sql_2 = pysqldf("SELECT sum(users), sum(nbr_clicks) as clicks FROM data group by date order by date;")
+user_identity_file = 'C://Users/daniy/Documents/Swissborg/identity_data.csv'
+adquisition_cost_data_file = 'C://Users/daniy/Documents/Swissborg/acquisition_cost_data.csv'
+transaction_data_file = 'C://Users/daniy/Documents/Swissborg/transaction_data.csv'
+#data = data.groupby(['date'])['nbr_clicks'].sum()
+data = data[data["nbr_clicks"]>100]
+data['users']= data['nbr_clicks']*data['cr']
+data['revenue']= data['users']*data['price_buckets']
+data['ARPU'] = data['revenue']/data['users']
+data = data.dropna()
+data_ARPU =  data.groupby(['date'])['ARPU'].cumsum()
+data = pd.DataFrame(data=data)
+data = data.dropna()
+data['nbr_click_growth'] = data.nbr_clicks.pct_change()
+data = data.dropna()
+growth = sum(data['nbr_click_growth'])/len(data['nbr_click_growth'])
+forecast_start = max(data['date'])
+growth.index = pd.date_range(max(data['date']), periods=data_sql.shape[0]+1)
+forecast = growth*data['nbr_clicks']
+plt.plot(forecast)
+plt.plot(data['nbr_clicks'])
+
+
+data_ARPU['cum_ARPU']= data['ARPU'].cumsum()
+date = min(data['date'])
+data['date'] = pd.to_datetime(data.date)
+date = pd.to_datetime(date)
+data['date_diff'] = data['date'] - date
+
+
+
+clicks = data_sql["clicks"]
+clicks = clicks.dropna()
+plt.plot(clicks)
+date = pd.to_datetime(data_sql['date'])
+len_date = int(len(date)/2)
+decomposition = seasonal_decompose(clicks, model= 'additive', period =  len_date)
+fig = decomposition.plot()
+plt.show()
+
+from statsmodels.tsa.stattools import adfuller
+result = adfuller(clicks) #que es adfuller
+print('ADF Statistic: %f' % result[0])
+print('p-value: %f' % result[1]) 
+print('flags: %f' % result[2])#p-value alto hace que sea non-stationary
+print('Critical Values:')
+for key, value in result[4].items():
+  print('\t%s: %.3f' % (key, value))
+plot_acf(data_sql.clicks)
+plot_pacf(data_sql.clicks)
+plt.show()
+
+# Build Model
+model = sm.tsa.arima.ARIMA(data_sql.clicks, order=(1,0,0))  #q= es el primer valor, d es el segundo valor, q es tercer valor
+  #la ARIMA da error, encontrar la razón, quizás sea un tema de format, quizás a un array o lista hay qye pasarla
+  # ver como sacar bien q d
+  # y una vez lo tengamos armar la predicción
+#model = ArmaProcess(clicks) 
+model_fit = model.fit()  
+forecast1 =model_fit.predict() ##.plot(legend = True, figsize =(12,8))
+#chequear #predict no funciona
+data_sql.clicks.plot(legend = True)
+plt.plot(forecast1)
+print(model_fit.summary())
+forecast2 = model_fit.forecast(100)
+x = model_fit.predict(start = 1, end = 10, dynamic= False)
+plt.plot(x)
+#clicks.plot(legend = True)
+plt.plot(forecast1)
+plt.plot(forecast2)
+data_sql.clicks.plot(legend = True)
+plt.plot(x)
+
+
+base_date = f"{int(data_sql.date.year[0])}-{3*int(data_sql.date.quarter[0])+1}-1"
+
+clicks.index = pd.date_range('2020-06-01', periods=data_sql.shape[0]+1)
+
+data_sql=data_sql.squeeze()
+model_x=sm.tsa.STLForecast(data, sm.tsa.arima.ARIMA)
+res = model_x.fit() #da error
+res.forecast(12).plot()
+data_sql.plot()
