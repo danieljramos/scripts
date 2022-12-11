@@ -1,3 +1,6 @@
+-- monthdiff was already in the database as was not calculated using SQL, it can be calculated using the date_truncate function and date_diff.
+
+
 SELECT raw.conversion_date,
        raw.monthdiff,
        raw.sum_of_conversions,
